@@ -4,20 +4,59 @@ from django.views.generic.list import ListView
 #Classe que vai ser herdada para criar detalhes dentro do post
 from django.views.generic.edit import UpdateView
 from posts.models import Post
+from django.db.models import Q, Count, Case, When
 
 
 class PostIndex(ListView):
     model = Post
     template_name = 'posts/index.html'
-    paginate_by = 10
+    paginate_by = 6
     context_object_name = 'posts'
 
-class PostBusca(PostIndex):
-    pass
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.order_by('-id').filter(publicado_post=True)
+        qs = qs.annotate(
+            numero_comentarios = Count(
+                Case(
+                    When(comentario__publicado_comentario=True, then=1)
+                )
+            )
+        )
+        return qs
 
+
+class PostBusca(PostIndex):
+    template_name = 'posts/post_busca.html'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        termo = self.request.GET.get('termo')
+        if not termo:
+            return qs
+
+        qs = qs.filter(
+            Q(titulo_post__icontains=termo) |
+            Q(autor_post__first_name__iexact=termo) |
+            Q(conteudo_post__iexact=termo) |
+            Q(excerto_post__icontains=termo) |
+            Q(categoria_post__nome_cat__iexact=termo)
+        )
+        return qs
 
 class PostCategoria(PostIndex):
-    pass
+    template_name = 'posts/post_categoria.html'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        categoria = self.kwargs.get('categoria', None)
+        if not categoria:
+            return qs
+                        #Busca o nome da categoria atravez da fk
+                        # __iexact busca exata o (i) quer dizer que e Case-insensitive
+        qs = qs.filter(categoria_post__nome_cat__iexact=categoria)
+        return qs
 
 
 class PostDetalhes(UpdateView):
